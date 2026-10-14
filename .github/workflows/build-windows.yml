@@ -87,12 +87,12 @@ jobs:
           Get-Command mt.exe, rc.exe, rm, touch, curl.exe | Format-Table Name, Source
           python build vagrant msvc2015-win64 --version - - --iteration 1 ..\src
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          D:\b\build\wkhtmltox\bin\wkhtmltopdf.exe --version
+          D:\b\pkg\targets\wkhtmltox\bin\wkhtmltopdf.exe --version
 
       - uses: actions/upload-artifact@v4
         with:
           name: wkhtmltox-msvc2015-win64
           path: |
-            D:\b\wkhtmltox-*.exe
-            D:\b\build\wkhtmltox\bin\*
+            D:\b\pkg\wkhtmltox-*.exe
+            D:\b\pkg\targets\wkhtmltox\bin\*
           if-no-files-found: error
