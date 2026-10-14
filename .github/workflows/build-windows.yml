@@ -1,0 +1,74 @@
+name: Build Windows (msvc2015-win64)
+on:
+  push:
+    branches: [ windows-build ]
+  workflow_dispatch:
+
+jobs:
+  msvc2015-win64:
+    name: wkhtmltopdf with patched Qt on Windows
+    runs-on: windows-2022
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      B: D:\b
+    steps:
+      - name: install VC++ 2015 build tools
+        run: |
+          choco install -y --no-progress vcbuildtools -ia "/Full"
+          $vc = 'C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat'
+          if (-not (Test-Path $vc)) {
+            Write-Host 'vcbuildtools did not provide VC 14.0, adding the v140 toolset to VS 2022'
+            & 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe' modify `
+              --installPath 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise' `
+              --add Microsoft.VisualStudio.Component.VC.140 --quiet --norestart --nocache | Out-Default
+          }
+          if (-not (Test-Path $vc)) { throw "vcvarsall.bat for VC 14.0 not found" }
+          "VS140COMNTOOLS=C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\Tools\" | Out-File $env:GITHUB_ENV -Append
+          cmd /c attrib "C:\Program Files (x86)\Windows Kits\10\include\wdf" +H 2>$null
+          exit 0
+
+      - name: install NSIS, jom and Python tools
+        run: |
+          choco install -y --no-progress nsis jom
+          "C:\Program Files\Git\usr\bin" | Out-File $env:GITHUB_PATH -Append
+          "C:\ProgramData\chocolatey\bin" | Out-File $env:GITHUB_PATH -Append
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: install pyyaml and conan 1.x
+        run: python -m pip install pyyaml "conan<2"
+
+      - name: fetch sources
+        run: |
+          New-Item -ItemType Directory -Force $env:B | Out-Null
+          cd $env:B
+          git clone https://github.com/${{ github.repository }}.git src
+          cd src
+          git checkout ${{ github.sha }}
+          git fetch --tags https://github.com/wkhtmltopdf/wkhtmltopdf.git
+          git config submodule.qt.url https://github.com/wkhtmltopdf/qt.git
+          git submodule update --init
+          cd $env:B
+          git clone https://github.com/wkhtmltopdf/packaging.git pkg
+          # build Qt and wkhtmltopdf with jom (parallel nmake)
+          (Get-Content pkg\build.yml) -replace 'make:\s+nmake', 'make:           jom' | Set-Content pkg\build.yml
+
+      - name: build and package
+        working-directory: D:\b\pkg
+        run: |
+          python build vagrant msvc2015-win64 --version - - --iteration 1 ..\src
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          D:\b\build\wkhtmltox\bin\wkhtmltopdf.exe --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wkhtmltox-msvc2015-win64
+          path: |
+            D:\b\wkhtmltox-*.exe
+            D:\b\build\wkhtmltox\bin\*
+          if-no-files-found: error
