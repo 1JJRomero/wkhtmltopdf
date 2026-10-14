@@ -56,7 +56,7 @@ jobs:
           cd $env:B
           git clone https://github.com/wkhtmltopdf/packaging.git pkg
           # build Qt and wkhtmltopdf with jom (parallel nmake)
-          (Get-Content pkg\build.yml) -replace 'make:\s+nmake', 'make:           jom' | Set-Content pkg\build.yml
+          (Get-Content pkg\build.yml) -replace 'make:\s+nmake', 'make:           C:\ProgramData\chocolatey\lib\jom\tools\jom.exe' | Set-Content pkg\build.yml
           # VC 14.0 cannot compile against the newest Windows SDK headers
           # (_mm_loadu_si64 in ucrt\wchar.h), so pin vcvarsall to the oldest
           # complete (ucrt + um + shared) Windows 10 SDK installed.
@@ -78,6 +78,13 @@ jobs:
       - name: build and package
         working-directory: D:\b\pkg
         run: |
+          # vcvarsall runs in cmd.exe, which mangles a very long PATH: drop
+          # duplicates and other Visual Studio toolchains before building.
+          Write-Host "PATH length before: $($env:Path.Length)"
+          $parts = $env:Path.Split(';') | Where-Object { $_ -and $_ -notmatch 'Microsoft Visual Studio\\20' -and $_ -notmatch 'Android|Haskell|ghcup|Rust|cargo|dotnet|Go\\bin|Julia|Mercurial|Azure|aws|Google|Docker' } | Select-Object -Unique
+          $env:Path = ($parts -join ';')
+          Write-Host "PATH length after: $($env:Path.Length)"
+          Get-Command mt.exe, rc.exe, rm, touch, curl.exe | Format-Table Name, Source
           python build vagrant msvc2015-win64 --version - - --iteration 1 ..\src
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           D:\b\build\wkhtmltox\bin\wkhtmltopdf.exe --version
