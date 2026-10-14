@@ -66,6 +66,11 @@ jobs:
             Sort-Object { [version]$_.Name } | Select-Object -First 1 -ExpandProperty Name
           if (-not $sdk) { throw "no complete Windows 10 SDK found" }
           Write-Host "Using Windows SDK $sdk"
+          # VC 14.0 vcvarsall only knows the unversioned SDK bin folder, so
+          # put this SDK's tools (mt.exe, rc.exe) on PATH explicitly.
+          $sdkbin = "C:\Program Files (x86)\Windows Kits\10\bin\$sdk\x64"
+          if (-not (Test-Path "$sdkbin\mt.exe")) { throw "mt.exe not found in $sdkbin" }
+          $sdkbin | Out-File $env:GITHUB_PATH -Append
           $py = 'pkg\vagrant\windows.py'
           (Get-Content $py -Raw).Replace('("%s" %s>nul)', '("%s" %s ' + $sdk + '>nul)') | Set-Content $py
           Select-String -Path $py -Pattern 'nul\)'
